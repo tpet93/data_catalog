@@ -74,22 +74,22 @@ def bbox(dirpath, filenames, filename, infix, gdalinfo):
     filenames = [_ for _ in filenames if regex.match(_)]
     if filenames:
         for filename in filenames:
-            t3 = _bbox_matches_airbus(dirpath, filename, infix, gdalinfo)
+            t3 = _bbox_airbus(dirpath, filename, infix, gdalinfo)
             if all(t3):
                 return t3
-            t3= _bbox_matches_aoi(dirpath, filename, infix, gdalinfo)
+            t3= _bbox_aoi(dirpath, filename, infix, gdalinfo)
             if all(t3):
                 return t3
-            t3 = _bbox_matches_maxar(dirpath, filename, infix, gdalinfo)
+            t3 = _bbox_maxar(dirpath, filename, infix, gdalinfo)
             if all(t3):
                 return t3
     else:
-        t3 = _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo)
+        t3 = _bbox_other_ortho(dirpath, filename, infix, gdalinfo)
         if any(t3):
             return t3
     return None, None, None
 
-def _bbox_matches_airbus(dirpath, filename, infix, gdalinfo):
+def _bbox_airbus(dirpath, filename, infix, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -112,7 +112,7 @@ def _bbox_matches_airbus(dirpath, filename, infix, gdalinfo):
             pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_matches_aoi(dirpath, filename, infix, gdalinfo):
+def _bbox_aoi(dirpath, filename, infix, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -137,7 +137,7 @@ def _bbox_matches_aoi(dirpath, filename, infix, gdalinfo):
             pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
+def _bbox_maxar(dirpath, filename, infix, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -154,24 +154,28 @@ def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
         except:
             pass
     try:
-        # Gdalinfo contains 'wgs84Extent'.'type'&.'coordinates'.[0],[1],[2],[3],[0].
-        if gdalinfo and 'wgs84Extent' in gdalinfo:
-            coordinates = gdalinfo['wgs84Extent']['coordinates']
-            lons = [float(_[0]) for _ in coordinates[0]]
-            lats = [float(_[1]) for _ in coordinates[0]]
-            bbox = build_bbox(lons, lats)
-            bbox_json = compacts(bbox)
+        bbox_json = _extents_wgs84(gdalinfo)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo):
+def _bbox_other_ortho(dirpath, filename, infix, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
     try:
-        # Gdalinfo contains 'wgs84Extent'.'type'&.'coordinates'.[0],[1],[2],[3],[0].
+        bbox_json = _extents_wgs84(gdalinfo)
+    except:
+        pass
+    return bbox_json, xmlfilepath, xml_json
+
+
+def _extents_wgs84(gdalinfo):
+    """Returns Bounding Box JSON for WGS84 if possible."""
+    bbox_json = None
+    try:
+        # Gdalinfo 'wgs84Extent'.'type'&.'coordinates'.[0],[1],[2],[3],[0].
         if gdalinfo and 'wgs84Extent' in gdalinfo:
             coordinates = gdalinfo['wgs84Extent']['coordinates']
             lons = [float(_[0]) for _ in coordinates[0]]
@@ -180,7 +184,7 @@ def _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo):
             bbox_json = compacts(bbox)
     except:
         pass
-    return bbox_json, xmlfilepath, xml_json
+    return bbox_json
 
 
 def preview_filepath(dirpath, filenames, infix):
@@ -188,27 +192,27 @@ def preview_filepath(dirpath, filenames, infix):
     regex = re.compile(r'^(.*?)\.jpg$', re.IGNORECASE)
     filenames = [_ for _ in filenames if regex.match(_)]
     for filename in filenames:
-        if _preview_filename_matches_airbus(filename, infix) \
-           or _preview_filename_matches_aoi(filename, infix) \
-           or _preview_filename_matches_maxar(filename, infix):
+        if _preview_filename_airbus(filename, infix) \
+           or _preview_filename_aoi(filename, infix) \
+           or _preview_filename_maxar(filename, infix):
             previewfilepath = posixpath(os.path.join(dirpath, filename))
             return previewfilepath
     return None
 
-def _preview_filename_matches_airbus(filename, infix):
+def _preview_filename_airbus(filename, infix):
     """Return Preview JPEG filename if possible."""
     # e.g. PREVIEW_PHR1A_MS_202111220049294_SEN_7108037101-2.JPG
     regex = re.compile(r'^PREVIEW_(.*?)\.jpg$', re.IGNORECASE)
     return regex.match(filename)
 
-def _preview_filename_matches_aoi(filename, infix):
+def _preview_filename_aoi(filename, infix):
     """Return Preview JPEG filename if possible."""
     # e.g. JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899.jpg
     filebase = os.path.splitext(filename)[0]
     regex = re.compile(rf'^{filebase}\.jpg$', re.IGNORECASE)
     return regex.match(filename)
 
-def _preview_filename_matches_maxar(filename, infix):
+def _preview_filename_maxar(filename, infix):
     """Return Preview JPEG filename if possible."""
     # e.g. 23NOV11004600-M2AS-050186140010_01_P001-BROWSE.JPG
     regex = re.compile(r'^(.*?)-BROWSE\.jpg$', re.IGNORECASE)

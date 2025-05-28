@@ -34,12 +34,12 @@ def gdal_info(dirpath, filename):
     # Equivalent to: 
     #   'gdalinfo -json -proj4 '{dirpath}\\{filename}' | jq -c .'.
     if platform.system() == 'Windows':
-        return gdal_info_subprocess(dirpath, filename)
+        return _gdal_info_subprocess(dirpath, filename)
     elif platform.system() == 'Linux':
-        return gdal_info_native(dirpath, filename)
+        return _gdal_info_native(dirpath, filename)
     raise NotImplementedError('Running on an unknown OS!')
 
-def gdal_info_native(dirpath, filename):
+def _gdal_info_native(dirpath, filename):
     """Returns Gdalinfo via native wrappers.
        Native (python API bindings over native) 
        skips case-sensitive '22633_TRING_1_4band' after '22633_TRING_1_4Band'."""
@@ -58,7 +58,7 @@ def gdal_info_native(dirpath, filename):
         print(msg, file=sys.stderr)
     return None
 
-def gdal_info_subprocess(dirpath, filename):
+def _gdal_info_subprocess(dirpath, filename):
     """Returns Gdalinfo via subprocess.
        Subprocess (exe or binary) picks up 
        case-sensitive '22633_TRING_1_4band' after '22633_TRING_1_4Band'."""
@@ -127,7 +127,7 @@ if __name__ == '__main__':
         print(f'dirpath={dirpath}', file=sys.stderr)
         filename = '23NOV11004600-P2AS_R2C1-050186140010_01_P001.TIF'
         print(f'filename={filename}', file=sys.stderr)
-        result = gdal_info_native(dirpath, filename)
+        result = _gdal_info_native(dirpath, filename)
         result_str = dumps(result)
         print(f'result_str={result_str}', file=sys.stderr)
 
@@ -136,7 +136,7 @@ if __name__ == '__main__':
         print(f'dirpath={dirpath}', file=sys.stderr)
         filename = '23NOV11004600-P2AS_R2C1-050186140010_01_P001.TIF'
         print(f'filename={filename}', file=sys.stderr)
-        result = gdal_info_subprocess(dirpath, filename)
+        result = _gdal_info_subprocess(dirpath, filename)
         result_str = dumps(result)
         print(f'result_str={result_str}', file=sys.stderr)
 
