@@ -28,11 +28,11 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
     try:
         # Filepath
         filepath = os.path.join(curdirpath, filename).replace(os.sep, "/")
-        print(fileuri(filepath), file=sys.stdout)
         if not os.path.exists(filepath):
-            msg = f'File "{filename}" not found!'
+            msg = f'File "{filepath}" not found!'
             print(msg, file=sys.stderr)
             raise FileNotFoundError(msg)
+        print(fileuri(filepath), file=sys.stdout)
         index.append({})
         index[-1].update({
             'filename_text': filename,
@@ -85,7 +85,7 @@ def crawler(progname, crawlname, crawldirpath):
     # sys.stderr = open(os.devnull, 'w') # swallow debugging
     crawldirpath = crawldirpath.replace(os.sep, "/")
     if not os.path.isdir(crawldirpath):
-        msg = f'Dir "{crawldirpath}" not found or not a directory!'
+        msg = f'Crawl Dir "{crawldirpath}" not found or not a directory!'
         print(msg, file=sys.stderr)
         raise NotADirectoryError(msg)
     for curdirpath, curdirnames, curfilenames in os.walk(crawldirpath, topdown=True):
