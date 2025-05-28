@@ -21,7 +21,7 @@ exclude_dirs = (
 )
 
 
-def imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, filename):
+def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, filename):
     """File Metadata Processor."""
     index = []
     errors = []
