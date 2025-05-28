@@ -70,12 +70,10 @@ def gdal_info_subprocess(dirpath, filename):
                 'gdalinfo',
                 '-json',
                 '-proj4',
-                # filename, # without filepath instead
                 filepath,
             ],
             capture_output=True,
             check=True,
-            # cwd=dirpath, # without filepath instead
             text=True,
         )
         return json.loads(result.stdout)
