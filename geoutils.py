@@ -5,11 +5,11 @@ import json
 from osgeo import gdal
 import platform
 import subprocess
-from utils import compacts, dumps
+from utils import dumps, posixpath
 
 
 def build_bbox(lons, lats):
-    """Build BBox from lons and lats lists."""
+    """Builds BBox from lons and lats lists."""
     min_lon = min(lons)
     max_lon = max(lons)
     min_lat = min(lats)
@@ -30,20 +30,20 @@ def build_bbox(lons, lats):
 
 
 def gdal_info(dirpath, filename):
-    """Return Gdalinfo as compact JSON."""
+    """Returns Gdalinfo as compact JSON."""
     # Equivalent to: 
     #   'gdalinfo -json -proj4 '{dirpath}\\{filename}' | jq -c .'.
-    if platform.system() == "Windows":
+    if platform.system() == 'Windows':
         return gdal_info_subprocess(dirpath, filename)
-    elif platform.system() == "Linux":
+    elif platform.system() == 'Linux':
         return gdal_info_native(dirpath, filename)
-    raise NotImplementedError("Running on an unknown OS!")
+    raise NotImplementedError('Running on an unknown OS!')
 
 def gdal_info_native(dirpath, filename):
-    """Return Gdalinfo via native wrappers.
+    """Returns Gdalinfo via native wrappers.
        Native (python API bindings over native) 
        skips case-sensitive '22633_TRING_1_4band' after '22633_TRING_1_4Band'."""
-    filepath = os.path.join(dirpath, filename).replace(os.sep, "/")
+    filepath = posixpath(os.path.join(dirpath, filename))
     try:
         gdal.UseExceptions() # default versus # gdal.DontUseExceptions()
         dataset = gdal.Open(filepath)
@@ -59,10 +59,10 @@ def gdal_info_native(dirpath, filename):
     return None
 
 def gdal_info_subprocess(dirpath, filename):
-    """Return Gdalinfo via subprocess.
+    """Returns Gdalinfo via subprocess.
        Subprocess (exe or binary) picks up 
        case-sensitive '22633_TRING_1_4band' after '22633_TRING_1_4Band'."""
-    filepath = os.path.join(dirpath, filename).replace(os.sep, "/")
+    filepath = posixpath(os.path.join(dirpath, filename))
     try:
         result = subprocess.run(
             [
@@ -83,7 +83,7 @@ def gdal_info_subprocess(dirpath, filename):
 
 
 def gdal_transform_rpc(dirpath, filename, coords):
-    """Return Gdaltransform with -rpc to transform a list of (x, y, z) coordinates.
+    """Returns Gdaltransform with -rpc to transform a list of (x, y, z) coordinates.
         Args:
             dirpath (str): Directory path to the image.
             filename (str): Image filename.
@@ -96,7 +96,7 @@ def gdal_transform_rpc(dirpath, filename, coords):
     # END {print ul RS ur RS lr RS ll RS ul}' 
     # | sed -E 's/.*\(\s*([0-9.+-]+),\s*([0-9.+-]+).*/\1 \2/' 
     # | gdaltransform -rpc -t_srs EPSG:4326 IMG_...JP2'.
-    filepath = os.path.join(dirpath, filename).replace(os.sep, "/")
+    filepath = posixpath(os.path.join(dirpath, filename))
     try:
         cmd = [
             'gdaltransform',

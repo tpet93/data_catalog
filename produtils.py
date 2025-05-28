@@ -1,12 +1,11 @@
 # Product Utilities.
 import sys
-from datetime import datetime
-import json
 import os
+from datetime import datetime
 import re
 import xmltodict
 from geoutils import build_bbox
-from utils import compacts, dumps, read_xml
+from utils import compacts, posixpath, read_xml
 
 
 AOI = 4
@@ -16,7 +15,7 @@ UNKNOWN = None
 
 
 def file_time(filename):
-    """Extract iso datetime from filename if possible."""
+    """Returns iso datetime, infix from filename if possible."""
     t2 = _file_time_airbus(filename)
     if all(t2):
         return t2
@@ -29,7 +28,7 @@ def file_time(filename):
     return None, None
 
 def _file_time_airbus(filename):
-    """Extract iso datetime from 4th infix if possible."""
+    """Returns iso datetime, infix from 4th infix of filename if possible."""
     # e.g. IMG_PHR1A_MS_202111220049294_SEN_7108037101-2_R1C1.JP2
     regex = re.compile(r'^(.*?)_(.*?)_(.*?)_(\d{14})\d{1}_', re.IGNORECASE)
     match = regex.match(filename)
@@ -42,7 +41,7 @@ def _file_time_airbus(filename):
     return None, None
 
 def _file_time_aoi(filename):
-    """Extract iso datetime from 3rd infix if possible."""
+    """Returns iso datetime, infix from 3rd infix of filename if possible."""
     # e.g. JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899.tif
     regex = re.compile(r'^(.*?)_(.*?)_(\d{14})_', re.IGNORECASE)
     match = regex.match(filename)
@@ -55,7 +54,7 @@ def _file_time_aoi(filename):
     return None, None
 
 def _file_time_maxar(filename):
-    """Extract iso datetime from 1st infix (prefix) if possible."""
+    """Returns iso datetime, infix from 1st infix (prefix) of filename if possible."""
     # e.g. 23NOV11004600-M2AS_R1C1-050186140010_01_P001.TIF
     #      23NOV11004600-M2AS_R2C1-050186140010_01_P001.TIF
     regex = re.compile(r'^(\d{2}[A-Z]{3}\d{8})-', re.IGNORECASE)
@@ -70,7 +69,7 @@ def _file_time_maxar(filename):
 
 
 def bbox(dirpath, filenames, filename, infix, gdalinfo):
-    """Retrieve Bounding Box JSON if possible."""
+    """Returns Bounding Box JSON, xml file path, xml json if possible."""
     regex = re.compile(r'^(.*?)\.xml$', re.IGNORECASE)
     filenames = [_ for _ in filenames if regex.match(_)]
     if filenames:
@@ -91,7 +90,7 @@ def bbox(dirpath, filenames, filename, infix, gdalinfo):
     return None, None, None
 
 def _bbox_matches_airbus(dirpath, filename, infix, gdalinfo):
-    """Retrieve Bounding Box JSON if possible."""
+    """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
@@ -114,7 +113,7 @@ def _bbox_matches_airbus(dirpath, filename, infix, gdalinfo):
     return bbox_json, xmlfilepath, xml_json
 
 def _bbox_matches_aoi(dirpath, filename, infix, gdalinfo):
-    """Retrieve Bounding Box JSON if possible."""
+    """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
@@ -139,7 +138,7 @@ def _bbox_matches_aoi(dirpath, filename, infix, gdalinfo):
     return bbox_json, xmlfilepath, xml_json
 
 def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
-    """Retrieve Bounding Box JSON if possible."""
+    """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
@@ -167,7 +166,7 @@ def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
     return bbox_json, xmlfilepath, xml_json
 
 def _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo):
-    """Retrieve Bounding Box JSON if possible."""
+    """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
@@ -185,32 +184,32 @@ def _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo):
 
 
 def preview_filepath(dirpath, filenames, infix):
-    """Find Preview JPEG filename if possible."""
+    """Return Preview JPEG filename if possible."""
     regex = re.compile(r'^(.*?)\.jpg$', re.IGNORECASE)
     filenames = [_ for _ in filenames if regex.match(_)]
     for filename in filenames:
         if _preview_filename_matches_airbus(filename, infix) \
            or _preview_filename_matches_aoi(filename, infix) \
            or _preview_filename_matches_maxar(filename, infix):
-            previewfilepath = os.path.join(dirpath, filename).replace(os.sep, "/")
+            previewfilepath = posixpath(os.path.join(dirpath, filename))
             return previewfilepath
     return None
 
 def _preview_filename_matches_airbus(filename, infix):
-    """Find Preview JPEG filename if possible."""
+    """Return Preview JPEG filename if possible."""
     # e.g. PREVIEW_PHR1A_MS_202111220049294_SEN_7108037101-2.JPG
     regex = re.compile(r'^PREVIEW_(.*?)\.jpg$', re.IGNORECASE)
     return regex.match(filename)
 
 def _preview_filename_matches_aoi(filename, infix):
-    """Find Preview JPEG filename if possible."""
+    """Return Preview JPEG filename if possible."""
     # e.g. JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899.jpg
     filebase = os.path.splitext(filename)[0]
     regex = re.compile(rf'^{filebase}\.jpg$', re.IGNORECASE)
     return regex.match(filename)
 
 def _preview_filename_matches_maxar(filename, infix):
-    """Find Preview JPEG filename if possible."""
+    """Return Preview JPEG filename if possible."""
     # e.g. 23NOV11004600-M2AS-050186140010_01_P001-BROWSE.JPG
     regex = re.compile(r'^(.*?)-BROWSE\.jpg$', re.IGNORECASE)
     return regex.match(filename)
@@ -247,4 +246,3 @@ if __name__ == '__main__':
         tests_filetime()
 
     tests()
-

@@ -24,9 +24,9 @@ DROP INDEX IF EXISTS idx_pk_imagery_metadata;
 --CREATE UNIQUE INDEX idx_pk_imagery_metadata ON imagery_metadata (filename);
 CREATE INDEX idx_pk_imagery_metadata ON imagery_metadata (filename);
 ---
---\copy imagery_metadata FROM 'crawl2psv.samples.psv' WITH (FORMAT csv, DELIMITER '|', HEADER true, QUOTE '"');
+\copy imagery_metadata FROM 'crawl2psv.samples.psv' WITH (FORMAT csv, DELIMITER '|', HEADER true, QUOTE '"');
 --\copy imagery_metadata FROM 'crawl2psv.maxar.psv' WITH (FORMAT csv, DELIMITER '|', HEADER true, QUOTE '"');
-\copy imagery_metadata FROM 'crawl2psv.raw.psv' WITH (FORMAT csv, DELIMITER '|', HEADER true, QUOTE '"');
+--\copy imagery_metadata FROM 'crawl2psv.raw.psv' WITH (FORMAT csv, DELIMITER '|', HEADER true, QUOTE '"');
 ---
 ALTER TABLE imagery_metadata ADD COLUMN bbox_geom GEOMETRY;
 ALTER TABLE imagery_metadata

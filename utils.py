@@ -1,5 +1,5 @@
 # Utilities.
-import sys
+import os
 import csv
 import json
 import platform
@@ -15,11 +15,23 @@ def dumps(data):
 
 def fileuri(path):
     """Return file uri for path."""
-    if platform.system() == "Windows":
-        return 'file:///' + path if path else None
-    elif platform.system() == "Linux":
-        return 'file://' + path if path else None
-    raise NotImplementedError("Running on an unknown OS!")
+    if not path:
+        return None
+    if platform.system() == 'Windows':
+        return 'file:///' + path
+    elif platform.system() == 'Linux':
+        return 'file://' + path
+    raise NotImplementedError('Running on an unknown OS!')
+
+def posixpath(path):
+    """Return posix path for path on Windows."""
+    if not path:
+        return None
+    if platform.system() == 'Windows':
+        return path.replace(os.sep, '/')
+    elif platform.system() == 'Linux':
+        return path
+    raise NotImplementedError('Running on an unknown OS!')
 
 
 def head_file(path, n=10):

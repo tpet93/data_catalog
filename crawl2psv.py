@@ -27,7 +27,7 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
     errors = []
     try:
         # Filepath
-        filepath = os.path.join(curdirpath, filename).replace(os.sep, "/")
+        filepath = posixpath(os.path.join(curdirpath, filename))
         if not os.path.exists(filepath):
             msg = f'File "{filepath}" not found!'
             print(msg, file=sys.stderr)
@@ -83,13 +83,13 @@ def crawler(progname, crawlname, crawldirpath):
     errors = []
     # original_stderr = sys.stderr
     # sys.stderr = open(os.devnull, 'w') # swallow debugging
-    crawldirpath = crawldirpath.replace(os.sep, "/")
+    crawldirpath = posixpath(crawldirpath)
     if not os.path.isdir(crawldirpath):
         msg = f'Crawl Dir "{crawldirpath}" not found or not a directory!'
         print(msg, file=sys.stderr)
         raise NotADirectoryError(msg)
     for curdirpath, curdirnames, curfilenames in os.walk(crawldirpath, topdown=True):
-        curdirpath = curdirpath.replace(os.sep, "/")
+        curdirpath = posixpath(curdirpath)
         # Modify curdirnames in-place to prevent os.walk from descending into excluded dirs
         curdirnames[:] = [_ for _ in curdirnames if _ not in exclude_dirs]
         # So can diff with find
