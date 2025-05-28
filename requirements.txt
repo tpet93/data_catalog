@@ -1,0 +1,4 @@
+# pip freeze > requirements.txt
+GDAL==3.8.4
+xmltodict==0.14.2
+# pip install --break-system-packages -r requirements.txt
