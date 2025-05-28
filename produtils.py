@@ -100,14 +100,10 @@ def _bbox_airbus(dirpath, filename, infix, gdalinfo):
     if match:
         try:
             xmlfilepath = os.path.join(dirpath, filename)
-            xml_str = read_xml(xmlfilepath)
-            xmlinfo = xmltodict.parse(xml_str)
+            xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
-            dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
-            lons = [float(_['LON']) for _ in dataset_extent['Vertex']]
-            lats = [float(_['LAT']) for _ in dataset_extent['Vertex']]
-            bbox = build_bbox(lons, lats)
-            bbox_json = compacts(bbox)
+            ...
+            bbox_json = _extents_xml_airbus_wgs84(xmlinfo)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
@@ -123,16 +119,10 @@ def _bbox_aoi(dirpath, filename, infix, gdalinfo):
     if match:
         try:
             xmlfilepath = os.path.join(dirpath, filename)
-            xml_str = read_xml(xmlfilepath)
-            xmlinfo = xmltodict.parse(xml_str)
+            xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
-            productinfo = xmlinfo['MetaData']['ProductInfo']
-            lons_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
-            lats_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
-            lons = [float(productinfo[_]) for _ in lons_keys]
-            lats = [float(productinfo[_]) for _ in lats_keys]
-            bbox = build_bbox(lons, lats)
-            bbox_json = compacts(bbox)
+            ...
+            bbox_json = _extents_xml_aoi_wgs84(xmlinfo)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
@@ -148,13 +138,13 @@ def _bbox_maxar(dirpath, filename, infix, gdalinfo):
     if match:
         try:
             xmlfilepath = os.path.join(dirpath, filename)
-            xml_str = read_xml(xmlfilepath)
-            xmlinfo = xmltodict.parse(xml_str)
+            xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
+            ...
         except:
             pass
     try:
-        bbox_json = _extents_wgs84(gdalinfo)
+        bbox_json = _extents_gdal_maxar_wgs84(gdalinfo)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json
@@ -165,15 +155,50 @@ def _bbox_other_ortho(dirpath, filename, infix, gdalinfo):
     xmlfilepath = None
     xml_json = None
     try:
-        bbox_json = _extents_wgs84(gdalinfo)
+        ...
+        bbox_json = _extents_gdal_wgs84(gdalinfo)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json
 
 
-def _extents_wgs84(gdalinfo):
+def _extents_xml_airbus_wgs84(xmlinfo):
     """Returns Bounding Box JSON for WGS84 if possible."""
-    bbox_json = None
+    try:
+        dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
+        lons = [float(_['LON']) for _ in dataset_extent['Vertex']]
+        lats = [float(_['LAT']) for _ in dataset_extent['Vertex']]
+        bbox = build_bbox(lons, lats)
+        return compacts(bbox)
+    except:
+        pass
+    return None
+
+def _extents_xml_aoi_wgs84(xmlinfo):
+    """Returns Bounding Box JSON for WGS84 if possible."""
+    try:
+        productinfo = xmlinfo['MetaData']['ProductInfo']
+        lons_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
+        lats_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
+        lons = [float(productinfo[_]) for _ in lons_keys]
+        lats = [float(productinfo[_]) for _ in lats_keys]
+        bbox = build_bbox(lons, lats)
+        return compacts(bbox)
+    except:
+        pass
+    return None
+
+def _extents_xml_maxar_wgs84(gdalinfo):
+    """Returns Bounding Box JSON for WGS84 if possible."""
+    ...
+    return None
+
+def _extents_gdal_maxar_wgs84(gdalinfo):
+    """Returns Bounding Box JSON for WGS84 if possible."""
+    return _extents_gdal_wgs84(gdalinfo)
+
+def _extents_gdal_wgs84(gdalinfo):
+    """Returns Bounding Box JSON for WGS84 if possible."""
     try:
         # Gdalinfo 'wgs84Extent'.'type'&.'coordinates'.[0],[1],[2],[3],[0].
         if gdalinfo and 'wgs84Extent' in gdalinfo:
@@ -181,10 +206,10 @@ def _extents_wgs84(gdalinfo):
             lons = [float(_[0]) for _ in coordinates[0]]
             lats = [float(_[1]) for _ in coordinates[0]]
             bbox = build_bbox(lons, lats)
-            bbox_json = compacts(bbox)
+            return compacts(bbox)
     except:
         pass
-    return bbox_json
+    return None
 
 
 def preview_filepath(dirpath, filenames, infix):
