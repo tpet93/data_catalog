@@ -2,6 +2,7 @@
 import sys
 import csv
 import json
+import platform
 
 
 def compacts(data):
@@ -9,8 +10,17 @@ def compacts(data):
     return json.dumps(data, separators=(',', ':'))
 
 def dumps(data):
-    """Return object dump to json."""
+    """Return object dump to pretty json."""
     return json.dumps(data, indent=4)
+
+def fileuri(path):
+    """Return file uri for path."""
+    if platform.system() == "Windows":
+        return 'file:///' + path if path else None
+    elif platform.system() == "Linux":
+        return 'file://' + path if path else None
+    raise NotImplementedError("Running on an unknown OS!")
+
 
 def head_file(path, n=10):
     """Return first n lines from file. If n is None, return all lines."""

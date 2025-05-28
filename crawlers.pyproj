@@ -13,7 +13,7 @@
     <RootNamespace>crawl</RootNamespace>
     <InterpreterId>Global|VisualStudio|OSGeo4W</InterpreterId>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>C:/Users/AM/Documents/crawlers/samples</CommandLineArguments>
+    <CommandLineArguments>C:/Users/AM/Documents/data_catalog/samples</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
     <IsWindowsApplication>False</IsWindowsApplication>
     <SuppressPackageInstallationPrompt>True</SuppressPackageInstallationPrompt>

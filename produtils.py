@@ -6,7 +6,7 @@ import os
 import re
 import xmltodict
 from geoutils import build_bbox
-from utils import dumps, read_xml
+from utils import compacts, dumps, read_xml
 
 
 AOI = 4
@@ -103,12 +103,12 @@ def _bbox_matches_airbus(dirpath, filename, infix, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xml_str = read_xml(xmlfilepath)
             xmlinfo = xmltodict.parse(xml_str)
-            xml_json = json.dumps(xmlinfo, separators=(',', ':'))
+            xml_json = compacts(xmlinfo)
             dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
             lons = [float(_['LON']) for _ in dataset_extent['Vertex']]
             lats = [float(_['LAT']) for _ in dataset_extent['Vertex']]
             bbox = build_bbox(lons, lats)
-            bbox_json = json.dumps(bbox, separators=(',', ':'))
+            bbox_json = compacts(bbox)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
@@ -126,14 +126,14 @@ def _bbox_matches_aoi(dirpath, filename, infix, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xml_str = read_xml(xmlfilepath)
             xmlinfo = xmltodict.parse(xml_str)
-            xml_json = json.dumps(xmlinfo, separators=(',', ':'))
+            xml_json = compacts(xmlinfo)
             productinfo = xmlinfo['MetaData']['ProductInfo']
             lons_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
             lats_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
             lons = [float(productinfo[_]) for _ in lons_keys]
             lats = [float(productinfo[_]) for _ in lats_keys]
             bbox = build_bbox(lons, lats)
-            bbox_json = json.dumps(bbox, separators=(',', ':'))
+            bbox_json = compacts(bbox)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
@@ -151,7 +151,7 @@ def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xml_str = read_xml(xmlfilepath)
             xmlinfo = xmltodict.parse(xml_str)
-            xml_json = json.dumps(xmlinfo, separators=(',', ':'))
+            xml_json = compacts(xmlinfo)
         except:
             pass
     try:
@@ -161,7 +161,7 @@ def _bbox_matches_maxar(dirpath, filename, infix, gdalinfo):
             lons = [float(_[0]) for _ in coordinates[0]]
             lats = [float(_[1]) for _ in coordinates[0]]
             bbox = build_bbox(lons, lats)
-            bbox_json = json.dumps(bbox, separators=(',', ':'))
+            bbox_json = compacts(bbox)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json
@@ -178,7 +178,7 @@ def _bbox_unmatched_other_ortho(dirpath, filename, infix, gdalinfo):
             lons = [float(_[0]) for _ in coordinates[0]]
             lats = [float(_[1]) for _ in coordinates[0]]
             bbox = build_bbox(lons, lats)
-            bbox_json = json.dumps(bbox, separators=(',', ':'))
+            bbox_json = compacts(bbox)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json

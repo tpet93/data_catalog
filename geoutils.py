@@ -5,7 +5,7 @@ import json
 from osgeo import gdal
 import platform
 import subprocess
-from utils import dumps
+from utils import compacts, dumps
 
 
 def build_bbox(lons, lats):
@@ -37,8 +37,7 @@ def gdal_info(dirpath, filename):
         return gdal_info_subprocess(dirpath, filename)
     elif platform.system() == "Linux":
         return gdal_info_native(dirpath, filename)
-    else:
-        raise NotImplementedError("Running on an unknown OS")
+    raise NotImplementedError("Running on an unknown OS!")
 
 def gdal_info_native(dirpath, filename):
     """Return Gdalinfo via native wrappers.

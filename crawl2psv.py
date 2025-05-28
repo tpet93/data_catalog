@@ -28,7 +28,7 @@ def imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, fil
     try:
         # Filepath
         filepath = os.path.join(curdirpath, filename).replace(os.sep, "/")
-        print(filepath, file=sys.stdout)
+        print(fileuri(filepath), file=sys.stdout)
         if not os.path.exists(filepath):
             msg = f'File "{filename}" not found!'
             print(msg, file=sys.stderr)
@@ -36,7 +36,7 @@ def imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, fil
         index.append({})
         index[-1].update({
             'filename_text': filename,
-            'filepath_text': 'file://' + filepath if filepath else None,
+            'filepath_text': fileuri(filepath),
         })
         # Filename datetime and infix for Product
         filetime, infix = file_time(filename)
@@ -56,15 +56,15 @@ def imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, fil
         # Preview JPEG filepath
         previewfilepath = preview_filepath(curdirpath, curfilenames, infix)
         index[-1].update({
-            'previewfilepath_text': "file://" + previewfilepath if previewfilepath else None,
+            'previewfilepath_text': fileuri(previewfilepath),
         })
         # Gdalinfo and BBox and XML filepaths
         gdalinfo = gdal_info(curdirpath, filename)
-        gdalinfo_json = json.dumps(gdalinfo, separators=(',', ':'))
+        gdalinfo_json = compacts(gdalinfo)
         bbox_json, metadatafilepath, metadata_json = bbox(curdirpath, curfilenames, filename, infix, gdalinfo)
         bbox_epsg = 4326 if bbox_json else None
         index[-1].update({
-            'metadatafilepath_text': "file://" + metadatafilepath if metadatafilepath else None,
+            'metadatafilepath_text': fileuri(metadatafilepath),
             'bbox_epsg_int': bbox_epsg,
             'bbox_json': bbox_json,
             'gdalinfo_json': gdalinfo_json,
@@ -77,14 +77,18 @@ def imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, fil
         return [], errors
     return index, errors
 
-def crawler(progname, rootname, rootpath):
+def crawler(progname, crawlname, crawldirpath):
     """Recurse dirtree returning gdalinfo metadata index for files matching criteria."""
     index = []
     errors = []
     # original_stderr = sys.stderr
     # sys.stderr = open(os.devnull, 'w') # swallow debugging
-    rootpath = rootpath.replace(os.sep, "/")
-    for curdirpath, curdirnames, curfilenames in os.walk(rootpath, topdown=True):
+    crawldirpath = crawldirpath.replace(os.sep, "/")
+    if not os.path.isdir(crawldirpath):
+        msg = f'Dir "{crawldirpath}" not found or not a directory!'
+        print(msg, file=sys.stderr)
+        raise NotADirectoryError(msg)
+    for curdirpath, curdirnames, curfilenames in os.walk(crawldirpath, topdown=True):
         curdirpath = curdirpath.replace(os.sep, "/")
         # Modify curdirnames in-place to prevent os.walk from descending into excluded dirs
         curdirnames[:] = [_ for _ in curdirnames if _ not in exclude_dirs]
@@ -94,7 +98,7 @@ def crawler(progname, rootname, rootpath):
         # Included file extensions
         filenames = [_ for _ in curfilenames if os.path.splitext(_)[1].lower() in include_exts]
         for filename in filenames:
-            _index, _errors = imagery_metadata_processor(progname, rootname, curdirpath, curfilenames, filename)
+            _index, _errors = imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, filename)
             if _index:
                 index.extend(_index)
             if _errors:
@@ -105,44 +109,44 @@ def crawler(progname, rootname, rootpath):
     # sys.stderr = original_stderr
     return index, errors
 
-def crawl2psv(progname, rootpath):
+def crawl2psv(progname, crawldirpath):
     """Crawl and output index PSV with crawler JSON metadata."""
-    rootpath = os.path.abspath(rootpath)
-    rootpath = os.path.dirname(rootpath) if os.path.isfile(rootpath) else rootpath
-    rootname = os.path.basename(rootpath)
+    crawldirpath = os.path.abspath(crawldirpath)
+    crawldirpath = os.path.dirname(crawldirpath) if os.path.isfile(crawldirpath) else crawldirpath
+    crawlname = os.path.basename(crawldirpath)
     start = datetime.now()
-    index, errors = crawler(progname, rootname, rootpath)
+    index, errors = crawler(progname, crawlname, crawldirpath)
     end = datetime.now()
     duration = end - start
     count = len(index)
     duration_per_count = duration / count
     info = { 
-        'rootpath': rootpath,
+        'rootdir': crawldirpath,
         'start': start.isoformat(), 
         'end': end.isoformat(),
         'duration': str(duration),
         'count': count,
         'duration_per_count': str(duration_per_count),
     }
-    jsonfn = f'{progname}.{rootname}' + '.json'
+    jsonfn = f'{progname}.{crawlname}' + '.json'
     save_json(jsonfn, info)
-    csvfn = f'{progname}.{rootname}' + '.psv'
+    csvfn = f'{progname}.{crawlname}' + '.psv'
     save_psv(csvfn, index)
-    errfn = f'{progname}.{rootname}' + '.err'
+    errfn = f'{progname}.{crawlname}' + '.err'
     save_txt(errfn, errors)
 
 
 def main(args=None):
     """Main parameters."""
     progname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-    rootpaths = []
+    crawldirpaths = []
     if args and len(args) > 1:
-        rootpaths = args[1:]
-    if not rootpaths:
-        print(f'Usage: {progname} root-path(s)...', file=sys.stderr)
+        crawldirpaths = args[1:]
+    if not crawldirpaths:
+        print(f'Usage: {progname} dir-path(s)...', file=sys.stderr)
         return 1
-    for rootpath in rootpaths:
-        crawl2psv(progname, rootpath)
+    for rootdirpath in crawldirpaths:
+        crawl2psv(progname, rootdirpath)
     return 0
 
 
