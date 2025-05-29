@@ -38,7 +38,8 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
             msg = f'File "{filepath}" not found!'
             print(msg, file=sys.stderr)
             raise FileNotFoundError(msg)
-        print(fileuri(filepath), file=sys.stdout)
+        if not DEBUG:
+            print(fileuri(filepath))
         index.append({})
         index[-1].update({
             'filename_text': filename,
@@ -67,7 +68,8 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
         # Gdalinfo and BBox and XML filepaths
         gdalinfo = gdal_info(curdirpath, filename)
         if DEBUG:
-            print(dumps(gdalinfo), file=sys.stdout)
+            print(dumps(gdalinfo), end='')
+            print(',')
         gdalinfo_json = compacts(gdalinfo)
         bbox_json, metadatafilepath, metadata_json = bbox(curdirpath, curfilenames, filename, infix, EPSG, gdalinfo)
         bbox_epsg = EPSG if bbox_json else None
@@ -96,6 +98,8 @@ def crawler(progname, crawlname, crawlrootdir):
         msg = f'Crawl Root Dir "{crawlrootdir}" not found or not a directory!'
         print(msg, file=sys.stderr)
         raise NotADirectoryError(msg)
+    if DEBUG:
+        print('[')
     for curdirpath, curdirnames, curfilenames in os.walk(crawlrootdir, topdown=True):
         curdirpath = posixpath(curdirpath)
         # Modify curdirnames in-place to prevent os.walk from descending into excluded dirs
@@ -113,6 +117,8 @@ def crawler(progname, crawlname, crawlrootdir):
                 errors.extend(_errors)
         else:
             pass
+    if DEBUG:
+        print(']')
     # sys.stderr.close()
     # sys.stderr = original_stderr
     return index, errors
