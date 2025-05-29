@@ -50,7 +50,6 @@ def _gdal_info_native(dirpath, filename):
         return gdal.Info(dataset, options=gdal.InfoOptions(
             format='json',
             options=[
-                '-proj4',
             ])
         )
     except Exception as ex:
@@ -68,7 +67,6 @@ def _gdal_info_subprocess(dirpath, filename):
             [
                 'gdalinfo',
                 '-json',
-                '-proj4',
                 filepath,
             ],
             capture_output=True,
