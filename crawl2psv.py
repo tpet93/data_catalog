@@ -7,8 +7,8 @@ from produtils import *
 from utils import *
 
 
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 
 EPSG = 4326
