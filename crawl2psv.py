@@ -77,18 +77,18 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
         return [], errors
     return index, errors
 
-def crawler(progname, crawlname, crawldirpath):
+def crawler(progname, crawlname, crawlrootdir):
     """Recurse dirtree returning gdalinfo metadata index for files matching criteria."""
     index = []
     errors = []
     # original_stderr = sys.stderr
     # sys.stderr = open(os.devnull, 'w') # swallow debugging
-    crawldirpath = posixpath(crawldirpath)
-    if not os.path.isdir(crawldirpath):
-        msg = f'Crawl Dir "{crawldirpath}" not found or not a directory!'
+    crawlrootdir = posixpath(crawlrootdir)
+    if not os.path.isdir(crawlrootdir):
+        msg = f'Crawl Root Dir "{crawlrootdir}" not found or not a directory!'
         print(msg, file=sys.stderr)
         raise NotADirectoryError(msg)
-    for curdirpath, curdirnames, curfilenames in os.walk(crawldirpath, topdown=True):
+    for curdirpath, curdirnames, curfilenames in os.walk(crawlrootdir, topdown=True):
         curdirpath = posixpath(curdirpath)
         # Modify curdirnames in-place to prevent os.walk from descending into excluded dirs
         curdirnames[:] = [_ for _ in curdirnames if _ not in exclude_dirs]
@@ -109,19 +109,19 @@ def crawler(progname, crawlname, crawldirpath):
     # sys.stderr = original_stderr
     return index, errors
 
-def crawl2psv(progname, crawldirpath):
+def crawl2psv(progname, crawlrootdir):
     """Crawl and output index PSV with crawler JSON metadata."""
-    crawldirpath = os.path.abspath(crawldirpath)
-    crawldirpath = os.path.dirname(crawldirpath) if os.path.isfile(crawldirpath) else crawldirpath
-    crawlname = os.path.basename(crawldirpath)
+    crawlrootdir = os.path.abspath(crawlrootdir)
+    crawlrootdir = os.path.dirname(crawlrootdir) if os.path.isfile(crawlrootdir) else crawlrootdir
+    crawlname = os.path.basename(crawlrootdir)
     start = datetime.now()
-    index, errors = crawler(progname, crawlname, crawldirpath)
+    index, errors = crawler(progname, crawlname, crawlrootdir)
     end = datetime.now()
     duration = end - start
     count = len(index)
     duration_per_count = duration / count
     info = { 
-        'rootdir': crawldirpath,
+        'crawlrootdir': crawlrootdir,
         'start': start.isoformat(), 
         'end': end.isoformat(),
         'duration': str(duration),
@@ -139,14 +139,14 @@ def crawl2psv(progname, crawldirpath):
 def main(args=None):
     """Main parameters."""
     progname = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-    crawldirpaths = []
+    crawlrootdirs = []
     if args and len(args) > 1:
-        crawldirpaths = args[1:]
-    if not crawldirpaths:
+        crawlrootdirs = args[1:]
+    if not crawlrootdirs:
         print(f'Usage: {progname} dir-path(s)...', file=sys.stderr)
         return 1
-    for rootdirpath in crawldirpaths:
-        crawl2psv(progname, rootdirpath)
+    for crawlrootdir in crawlrootdirs:
+        crawl2psv(progname, crawlrootdir)
     return 0
 
 
