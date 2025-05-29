@@ -5,7 +5,7 @@
 *.out
 *.psv
 .~lock.*
-samples/
+sample*/
 scratch/
 venv/
 

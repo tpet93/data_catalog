@@ -8,21 +8,21 @@ import subprocess
 from utils import dumps, posixpath
 
 
-def build_bbox(lons, lats):
-    """Builds BBox from lons and lats lists."""
-    min_lon = min(lons)
-    max_lon = max(lons)
-    min_lat = min(lats)
-    max_lat = max(lats)
+def build_bbox(xs, ys):
+    """Builds BBox from xs and ys (or lons and lats) lists."""
+    min_x = min(xs)
+    max_x = max(xs)
+    min_y = min(ys)
+    max_y = max(ys)
     bbox = {
         'type': 'Polygon',
         'coordinates': [
             [
-                [min_lon, min_lat],
-                [min_lon, max_lat],
-                [max_lon, max_lat],
-                [max_lon, min_lat],
-                [min_lon, min_lat]
+                [min_x, min_y],
+                [min_x, max_y],
+                [max_x, max_y],
+                [max_x, min_y],
+                [min_x, min_y]
             ]
         ]
     }
@@ -82,7 +82,7 @@ def _gdal_info_subprocess(dirpath, filename):
     return None
 
 
-def gdal_transform_rpc(dirpath, filename, coords):
+def gdal_transform_rpc(dirpath, filename, epsg, coords):
     """Returns Gdaltransform with -rpc to transform a list of (x, y, z) coordinates.
         Args:
             dirpath (str): Directory path to the image.
@@ -101,7 +101,7 @@ def gdal_transform_rpc(dirpath, filename, coords):
         cmd = [
             'gdaltransform',
             '-rpc',
-            '-t_srs', 'EPSG:4326',
+            '-t_srs', f'EPSG:{epsg}',
             filepath
         ]
         # Join all coordinates into a single input string

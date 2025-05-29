@@ -2,10 +2,16 @@
 import sys
 import os
 from datetime import datetime
-from osgeo import gdalconst
 from geoutils import *
 from produtils import *
 from utils import *
+
+
+# DEBUG = False
+DEBUG = True
+
+
+EPSG = 4326
 
 
 include_exts = (
@@ -60,9 +66,11 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
         })
         # Gdalinfo and BBox and XML filepaths
         gdalinfo = gdal_info(curdirpath, filename)
+        if DEBUG:
+            print(dumps(gdalinfo), file=sys.stdout)
         gdalinfo_json = compacts(gdalinfo)
-        bbox_json, metadatafilepath, metadata_json = bbox(curdirpath, curfilenames, filename, infix, gdalinfo)
-        bbox_epsg = 4326 if bbox_json else None
+        bbox_json, metadatafilepath, metadata_json = bbox(curdirpath, curfilenames, filename, infix, EPSG, gdalinfo)
+        bbox_epsg = EPSG if bbox_json else None
         index[-1].update({
             'metadatafilepath_text': fileuri(metadatafilepath),
             'bbox_epsg_int': bbox_epsg,

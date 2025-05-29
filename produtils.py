@@ -1,4 +1,5 @@
 # Product Utilities.
+from pickle import TRUE
 import sys
 import os
 from datetime import datetime
@@ -68,28 +69,28 @@ def _file_time_maxar(filename):
     return None, None
 
 
-def bbox(dirpath, filenames, filename, infix, gdalinfo):
+def bbox(dirpath, filenames, filename, infix, epsg, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     regex = re.compile(r'^(.*?)\.xml$', re.IGNORECASE)
     filenames = [_ for _ in filenames if regex.match(_)]
     if filenames:
         for filename in filenames:
-            t3 = _bbox_airbus(dirpath, filename, infix, gdalinfo)
+            t3 = _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo)
             if all(t3):
                 return t3
-            t3= _bbox_aoi(dirpath, filename, infix, gdalinfo)
+            t3= _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo)
             if all(t3):
                 return t3
-            t3 = _bbox_maxar(dirpath, filename, infix, gdalinfo)
+            t3 = _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo)
             if all(t3):
                 return t3
     else:
-        t3 = _bbox_other_ortho(dirpath, filename, infix, gdalinfo)
+        t3 = _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo)
         if any(t3):
             return t3
     return None, None, None
 
-def _bbox_airbus(dirpath, filename, infix, gdalinfo):
+def _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -103,12 +104,12 @@ def _bbox_airbus(dirpath, filename, infix, gdalinfo):
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
             ...
-            bbox_json = _extents_xml_airbus_wgs84(xmlinfo)
+            bbox_json = _extents_xml_airbus_wgs84(epsg, xmlinfo)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_aoi(dirpath, filename, infix, gdalinfo):
+def _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -122,12 +123,12 @@ def _bbox_aoi(dirpath, filename, infix, gdalinfo):
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
             ...
-            bbox_json = _extents_xml_aoi_wgs84(xmlinfo)
+            bbox_json = _extents_xml_aoi_wgs84(epsg, xmlinfo)
         except:
             pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_maxar(dirpath, filename, infix, gdalinfo):
+def _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
@@ -141,71 +142,78 @@ def _bbox_maxar(dirpath, filename, infix, gdalinfo):
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
             ...
+            bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
         except:
             pass
-    try:
-        bbox_json = _extents_gdal_maxar_wgs84(gdalinfo)
-    except:
-        pass
     return bbox_json, xmlfilepath, xml_json
 
-def _bbox_other_ortho(dirpath, filename, infix, gdalinfo):
+def _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo):
     """Returns Bounding Box JSON, xml file path, xml json if possible."""
     bbox_json = None
     xmlfilepath = None
     xml_json = None
     try:
-        ...
-        bbox_json = _extents_gdal_wgs84(gdalinfo)
+        bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
     except:
         pass
     return bbox_json, xmlfilepath, xml_json
 
 
-def _extents_xml_airbus_wgs84(xmlinfo):
+def _gdal_contains_epsg(epsg, gdalinfo):
+    """Return gdalinfo contains epsg crs other than WGS84 Extents."""
+    # Gdalinfo 'stac'.'proj:epsg'
+    if gdalinfo and 'stac' in gdalinfo and 'proj:epsg' in gdalinfo['stac']:
+        return True
+    return None
+
+def _gdal_contains_wgs84(epsg, gdalinfo):
+    """Return gdalinfo contains WGS84 Extents."""
+    # Gdalinfo 'wgs84Extent'
+    if gdalinfo and 'wgs84Extent' in gdalinfo:
+        return True
+    return None
+
+
+def _extents_xml_airbus_wgs84(epsg, xmlinfo):
     """Returns Bounding Box JSON for WGS84 if possible."""
     try:
         dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
-        lons = [float(_['LON']) for _ in dataset_extent['Vertex']]
-        lats = [float(_['LAT']) for _ in dataset_extent['Vertex']]
-        bbox = build_bbox(lons, lats)
+        xs = [float(_['LON']) for _ in dataset_extent['Vertex']]
+        ys = [float(_['LAT']) for _ in dataset_extent['Vertex']]
+        bbox = build_bbox(xs, ys)
         return compacts(bbox)
     except:
         pass
     return None
 
-def _extents_xml_aoi_wgs84(xmlinfo):
+def _extents_xml_aoi_wgs84(epsg, xmlinfo):
     """Returns Bounding Box JSON for WGS84 if possible."""
     try:
         productinfo = xmlinfo['MetaData']['ProductInfo']
-        lons_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
-        lats_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
-        lons = [float(productinfo[_]) for _ in lons_keys]
-        lats = [float(productinfo[_]) for _ in lats_keys]
-        bbox = build_bbox(lons, lats)
+        xs_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
+        ys_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
+        xs = [float(productinfo[_]) for _ in xs_keys]
+        ys = [float(productinfo[_]) for _ in ys_keys]
+        bbox = build_bbox(xs, ys)
         return compacts(bbox)
     except:
         pass
     return None
 
-def _extents_xml_maxar_wgs84(gdalinfo):
+def _extents_xml_maxar_wgs84(epsg, xmlinfo):
     """Returns Bounding Box JSON for WGS84 if possible."""
-    ...
+    ... # Never implemented for multiple tiles; used Gdalinfo 'wgs84Extent' instead
     return None
 
-def _extents_gdal_maxar_wgs84(gdalinfo):
+def _extents_gdal_wgs84(epsg, gdalinfo):
     """Returns Bounding Box JSON for WGS84 if possible."""
-    return _extents_gdal_wgs84(gdalinfo)
-
-def _extents_gdal_wgs84(gdalinfo):
-    """Returns Bounding Box JSON for WGS84 if possible."""
+    # Gdalinfo 'wgs84Extent'.'coordinates'[[0],[1],[2],[3],[0]]
     try:
-        # Gdalinfo 'wgs84Extent'.'type'&.'coordinates'.[0],[1],[2],[3],[0].
-        if gdalinfo and 'wgs84Extent' in gdalinfo:
+        if _gdal_contains_wgs84(gdalinfo):
             coordinates = gdalinfo['wgs84Extent']['coordinates']
-            lons = [float(_[0]) for _ in coordinates[0]]
-            lats = [float(_[1]) for _ in coordinates[0]]
-            bbox = build_bbox(lons, lats)
+            xs = [float(_[0]) for _ in coordinates[0]]
+            ys = [float(_[1]) for _ in coordinates[0]]
+            bbox = build_bbox(xs, ys)
             return compacts(bbox)
     except:
         pass
