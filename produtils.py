@@ -5,13 +5,14 @@ import os
 from datetime import datetime
 import re
 import xmltodict
-from geoutils import build_bbox
 from utils import compacts, posixpath, read_xml
+from tests.testpaths import testpaths
 
 
 AOI = 4
 AIRBUS = 3
 MAXAR = 1
+ABM = 2
 UNKNOWN = None
 
 
@@ -26,8 +27,26 @@ def file_time(filename):
     t2 = _file_time_maxar(filename)
     if all(t2):
         return t2
+    t2 = _file_time_abm(filename)
+    if all(t2):
+        return t2
     return None, None
 
+
+
+# 'YYMMDD_' date format
+def _file_time_abm(filename):
+    """Returns iso datetime, infix from 2nd infix of filename if possible."""
+    # e.g. 230110_BlueHills.extensiton
+    regex = re.compile(r'^(\d{6})_(.*?)$', re.IGNORECASE)
+    match = regex.match(filename)
+    if match:
+        try:
+            filetime_str = match.group(1)
+            return datetime.strptime(filetime_str, '%y%m%d').isoformat(), ABM
+        except ValueError:
+            pass
+    return None, None
 def _file_time_airbus(filename):
     """Returns iso datetime, infix from 4th infix of filename if possible."""
     # e.g. IMG_PHR1A_MS_202111220049294_SEN_7108037101-2_R1C1.JP2
@@ -35,7 +54,7 @@ def _file_time_airbus(filename):
     match = regex.match(filename)
     if match:
         try:
-            filetime_str = match.group(AOI)
+            filetime_str = match.group(4)
             return datetime.strptime(filetime_str, '%Y%m%d%H%M%S').isoformat(), AOI
         except ValueError:
             pass
@@ -47,7 +66,7 @@ def _file_time_aoi(filename):
     regex = re.compile(r'^(.*?)_(.*?)_(\d{14})_', re.IGNORECASE)
     match = regex.match(filename)
     if match:
-        filetime_str = match.group(AIRBUS)
+        filetime_str = match.group(3)
         try:
             return datetime.strptime(filetime_str, '%Y%m%d%H%M%S').isoformat(), AIRBUS
         except ValueError:
@@ -61,7 +80,7 @@ def _file_time_maxar(filename):
     regex = re.compile(r'^(\d{2}[A-Z]{3}\d{8})-', re.IGNORECASE)
     match = regex.match(filename)
     if match:
-        filetime_str = match.group(MAXAR)
+        filetime_str = match.group(1)
         try:
             return datetime.strptime(filetime_str, '%y%b%d%H%M%S').isoformat(), MAXAR
         except ValueError:
@@ -69,30 +88,24 @@ def _file_time_maxar(filename):
     return None, None
 
 
-def bbox(dirpath, filenames, filename, infix, epsg, gdalinfo):
-    """Returns Bounding Box JSON, xml file path, xml json if possible."""
+def metadatapath(dirpath, filenames, filename, infix):
     regex = re.compile(r'^(.*?)\.xml$', re.IGNORECASE)
     filenames = [_ for _ in filenames if regex.match(_)]
     if filenames:
         for filename in filenames:
-            t3 = _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo)
+            t3 = _metadata_airbus(dirpath, filename, infix)
             if all(t3):
                 return t3
-            t3= _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo)
+            t3= _metadata_aoi(dirpath, filename, infix)
             if all(t3):
                 return t3
-            t3 = _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo)
+            t3 = _metadata_maxar(dirpath, filename, infix)
             if all(t3):
                 return t3
-    else:
-        t3 = _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo)
-        if any(t3):
-            return t3
-    return None, None, None
+    return None,None
 
-def _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo):
-    """Returns Bounding Box JSON, xml file path, xml json if possible."""
-    bbox_json = None
+def _metadata_airbus(dirpath, filename, infix):
+    """Returns Metadata XML file path, xml json if possible."""
     xmlfilepath = None
     xml_json = None
     # e.g. DIM_PHR1A_MS_202111220049294_SEN_7108037101-2.XML
@@ -103,15 +116,11 @@ def _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
-            ...
-            bbox_json = _extents_xml_airbus_wgs84(epsg, xmlinfo)
         except:
             pass
-    return bbox_json, xmlfilepath, xml_json
-
-def _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo):
-    """Returns Bounding Box JSON, xml file path, xml json if possible."""
-    bbox_json = None
+    return xmlfilepath, xml_json
+def _metadata_aoi(dirpath, filename, infix):
+    """Returns Metadata XML file path, xml json if possible."""
     xmlfilepath = None
     xml_json = None
     # e.g. JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899_meta.xml
@@ -122,15 +131,12 @@ def _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
-            ...
-            bbox_json = _extents_xml_aoi_wgs84(epsg, xmlinfo)
         except:
             pass
-    return bbox_json, xmlfilepath, xml_json
+    return xmlfilepath, xml_json
 
-def _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo):
-    """Returns Bounding Box JSON, xml file path, xml json if possible."""
-    bbox_json = None
+def _metadata_maxar(dirpath, filename, infix):
+    """Returns Metadata XML file path, xml json if possible."""
     xmlfilepath = None
     xml_json = None
     # e.g. 23NOV11004600-M2AS-050186140010_01_P001.XML
@@ -141,83 +147,158 @@ def _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo):
             xmlfilepath = os.path.join(dirpath, filename)
             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
             xml_json = compacts(xmlinfo)
-            ...
-            bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
         except:
             pass
-    return bbox_json, xmlfilepath, xml_json
-
-def _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo):
-    """Returns Bounding Box JSON, xml file path, xml json if possible."""
-    bbox_json = None
-    xmlfilepath = None
-    xml_json = None
-    try:
-        bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
-    except:
-        pass
-    return bbox_json, xmlfilepath, xml_json
+    return xmlfilepath, xml_json
 
 
-def _gdal_contains_epsg(epsg, gdalinfo):
-    """Return gdalinfo contains epsg crs other than WGS84 Extents."""
-    # Gdalinfo 'stac'.'proj:epsg'
-    if gdalinfo and 'stac' in gdalinfo and 'proj:epsg' in gdalinfo['stac']:
-        return True
-    return None
-
-def _gdal_contains_wgs84(epsg, gdalinfo):
-    """Return gdalinfo contains WGS84 Extents."""
-    # Gdalinfo 'wgs84Extent'
-    if gdalinfo and 'wgs84Extent' in gdalinfo:
-        return True
-    return None
 
 
-def _extents_xml_airbus_wgs84(epsg, xmlinfo):
-    """Returns Bounding Box JSON for WGS84 if possible."""
-    try:
-        dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
-        xs = [float(_['LON']) for _ in dataset_extent['Vertex']]
-        ys = [float(_['LAT']) for _ in dataset_extent['Vertex']]
-        bbox = build_bbox(xs, ys)
-        return compacts(bbox)
-    except:
-        pass
-    return None
 
-def _extents_xml_aoi_wgs84(epsg, xmlinfo):
-    """Returns Bounding Box JSON for WGS84 if possible."""
-    try:
-        productinfo = xmlinfo['MetaData']['ProductInfo']
-        xs_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
-        ys_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
-        xs = [float(productinfo[_]) for _ in xs_keys]
-        ys = [float(productinfo[_]) for _ in ys_keys]
-        bbox = build_bbox(xs, ys)
-        return compacts(bbox)
-    except:
-        pass
-    return None
+# def bbox(dirpath, filenames, filename, infix, epsg, gdalinfo):
+#     """Returns Bounding Box JSON, xml file path, xml json if possible."""
+#     regex = re.compile(r'^(.*?)\.xml$', re.IGNORECASE)
+#     filenames = [_ for _ in filenames if regex.match(_)]
+#     if filenames:
+#         for filename in filenames:
+#             t3 = _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo)
+#             if all(t3):
+#                 return t3
+#             t3= _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo)
+#             if all(t3):
+#                 return t3
+#             t3 = _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo)
+#             if all(t3):
+#                 return t3
+#     else:
+#         t3 = _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo)
+#         if any(t3):
+#             return t3
+#     return None, None, None
 
-def _extents_xml_maxar_wgs84(epsg, xmlinfo):
-    """Returns Bounding Box JSON for WGS84 if possible."""
-    ... # Never implemented for multiple tiles; used Gdalinfo 'wgs84Extent' instead
-    return None
+# def _bbox_airbus(dirpath, filename, infix, epsg, gdalinfo):
+#     """Returns Bounding Box JSON, xml file path, xml json if possible."""
+#     bbox_json = None
+#     xmlfilepath = None
+#     xml_json = None
+#     # e.g. DIM_PHR1A_MS_202111220049294_SEN_7108037101-2.XML
+#     regex = re.compile(r'^DIM_(.*?)\.xml$', re.IGNORECASE)
+#     match = regex.match(filename)
+#     if match:
+#         try:
+#             xmlfilepath = os.path.join(dirpath, filename)
+#             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
+#             xml_json = compacts(xmlinfo)
+#             ...
+#             bbox_json = _extents_xml_airbus_wgs84(epsg, xmlinfo)
+#         except:
+#             pass
+#     return bbox_json, xmlfilepath, xml_json
 
-def _extents_gdal_wgs84(epsg, gdalinfo):
-    """Returns Bounding Box JSON for WGS84 if possible."""
-    # Gdalinfo 'wgs84Extent'.'coordinates'[[0],[1],[2],[3],[0]]
-    try:
-        if _gdal_contains_wgs84(gdalinfo):
-            coordinates = gdalinfo['wgs84Extent']['coordinates']
-            xs = [float(_[0]) for _ in coordinates[0]]
-            ys = [float(_[1]) for _ in coordinates[0]]
-            bbox = build_bbox(xs, ys)
-            return compacts(bbox)
-    except:
-        pass
-    return None
+# def _bbox_aoi(dirpath, filename, infix, epsg, gdalinfo):
+#     """Returns Bounding Box JSON, xml file path, xml json if possible."""
+#     bbox_json = None
+#     xmlfilepath = None
+#     xml_json = None
+#     # e.g. JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899_meta.xml
+#     regex = re.compile(r'^(.*?)_meta\.xml$', re.IGNORECASE)
+#     match = regex.match(filename)
+#     if match:
+#         try:
+#             xmlfilepath = os.path.join(dirpath, filename)
+#             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
+#             xml_json = compacts(xmlinfo)
+#             ...
+#             bbox_json = _extents_xml_aoi_wgs84(epsg, xmlinfo)
+#         except:
+#             pass
+#     return bbox_json, xmlfilepath, xml_json
+
+# def _bbox_maxar(dirpath, filename, infix, epsg, gdalinfo):
+#     """Returns Bounding Box JSON, xml file path, xml json if possible."""
+#     bbox_json = None
+#     xmlfilepath = None
+#     xml_json = None
+#     # e.g. 23NOV11004600-M2AS-050186140010_01_P001.XML
+#     regex = re.compile(r'^(.*?)\.xml$', re.IGNORECASE)
+#     match = regex.match(filename)
+#     if match:
+#         try:
+#             xmlfilepath = os.path.join(dirpath, filename)
+#             xmlinfo = xmltodict.parse(read_xml(xmlfilepath))
+#             xml_json = compacts(xmlinfo)
+#             ...
+#             bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
+#         except:
+#             pass
+#     return bbox_json, xmlfilepath, xml_json
+
+# def _bbox_other_ortho(dirpath, filename, infix, epsg, gdalinfo):
+#     """Returns Bounding Box JSON, xml file path, xml json if possible."""
+#     bbox_json = None
+#     xmlfilepath = None
+#     xml_json = None
+#     try:
+#         bbox_json = _extents_gdal_wgs84(epsg, gdalinfo)
+#     except:
+#         pass
+#     return bbox_json, xmlfilepath, xml_json
+
+
+
+
+# def _gdal_contains_wgs84(epsg, gdalinfo):
+#     """Return gdalinfo contains WGS84 Extents."""
+#     # Gdalinfo 'wgs84Extent'
+#     if gdalinfo and 'wgs84Extent' in gdalinfo:
+#         return True
+#     return None
+
+
+# def _extents_xml_airbus_wgs84(epsg, xmlinfo):
+#     """Returns Bounding Box JSON for WGS84 if possible."""
+#     try:
+#         dataset_extent = xmlinfo['Dimap_Document']['Dataset_Content']['Dataset_Extent']
+#         xs = [float(_['LON']) for _ in dataset_extent['Vertex']]
+#         ys = [float(_['LAT']) for _ in dataset_extent['Vertex']]
+#         bbox = build_bbox(xs, ys)
+#         return compacts(bbox)
+#     except:
+#         pass
+#     return None
+
+# def _extents_xml_aoi_wgs84(epsg, xmlinfo):
+#     """Returns Bounding Box JSON for WGS84 if possible."""
+#     try:
+#         productinfo = xmlinfo['MetaData']['ProductInfo']
+#         xs_keys = ('UpperLeftLongitude', 'UpperRightLongitude', 'LowerRightLongitude', 'LowerLeftLongitude')
+#         ys_keys = ('UpperLeftLatitude', 'UpperRightLatitude', 'LowerRightLatitude', 'LowerLeftLatitude')
+#         xs = [float(productinfo[_]) for _ in xs_keys]
+#         ys = [float(productinfo[_]) for _ in ys_keys]
+#         bbox = build_bbox(xs, ys)
+#         return compacts(bbox)
+#     except:
+#         pass
+#     return None
+
+# def _extents_xml_maxar_wgs84(epsg, xmlinfo):
+#     """Returns Bounding Box JSON for WGS84 if possible."""
+#     ... # Never implemented for multiple tiles; used Gdalinfo 'wgs84Extent' instead
+#     return None
+
+# def _extents_gdal_wgs84(epsg, gdalinfo):
+#     """Returns Bounding Box JSON for WGS84 if possible."""
+#     # Gdalinfo 'wgs84Extent'.'coordinates'[[0],[1],[2],[3],[0]]
+#     try:
+#         if _gdal_contains_wgs84(gdalinfo):
+#             coordinates = gdalinfo['wgs84Extent']['coordinates']
+#             xs = [float(_[0]) for _ in coordinates[0]]
+#             ys = [float(_[1]) for _ in coordinates[0]]
+#             bbox = build_bbox(xs, ys)
+#             return compacts(bbox)
+#     except:
+#         pass
+#     return None
 
 
 def preview_filepath(dirpath, filenames, infix):
@@ -255,29 +336,11 @@ def _preview_filename_maxar(filename, infix):
 if __name__ == '__main__':
     # Tests for produtils.
     def tests_filetime():
-        # Airbus
-        filename = 'IMG_PHR1A_MS_202111220049294_SEN_7108037101-2_R1C1.JP2'
-        print(f'filename={filename}', file=sys.stderr)
-        result = file_time(filename)
-        print(f'result={result}', file=sys.stderr)
-        # Aoi
-        filename = 'JL1KF01C_PMSL3_20250112084005_200339713_101_0039_001_L1_MSS_978899.tif'
-        print(f'filename={filename}', file=sys.stderr)
-        result = file_time(filename)
-        print(f'result={result}', file=sys.stderr)
-        # Maxar
-        filename = '23NOV11004600-P2AS_R2C1-050186140010_01_P001.TIF'
-        print(f'filename={filename}', file=sys.stderr)
-        result = file_time(filename)
-        print(f'result={result}', file=sys.stderr)
-        filename = 'bad.TIF'
-        print(f'filename={filename}', file=sys.stderr)
-        result = file_time(filename)
-        print(f'result={result}', file=sys.stderr)
-        filename = ''
-        print(f'filename={filename}', file=sys.stderr)
-        result = file_time(filename)
-        print(f'result={result}', file=sys.stderr)
+        for fullpath in testpaths:
+            filename = os.path.basename(fullpath)
+            print(f'filename={filename}', file=sys.stderr)
+            result = file_time(filename)
+            print(f'result={result}', file=sys.stderr)
 
     def tests():
         tests_filetime()
