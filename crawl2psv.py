@@ -6,12 +6,15 @@ from geoutils import *
 from produtils import *
 from utils import *
 
+DEBUG = True
+DEBUG = False  # Set to True for debugging output
 
-DEBUG = False
-# DEBUG = True
 
 
-EPSG = 4326
+
+
+
+EPSG = 3857  # EPSG code for WGS84 / Pseudo-Mercator
 
 
 include_exts = (
@@ -66,12 +69,16 @@ def imagery_metadata_processor(progname, crawlname, curdirpath, curfilenames, fi
             'previewfilepath_text': fileuri(previewfilepath),
         })
         # Gdalinfo and BBox and XML filepaths
-        gdalinfo = gdal_info(curdirpath, filename)
+        gdalinfo = gdal_info(filepath)
+        polygon = getbound_poly(filepath, gdalinfo, target_crs=EPSG)
         if DEBUG:
             print(dumps(gdalinfo), end='')
             print(',')
         gdalinfo_json = compacts(gdalinfo)
-        bbox_json, metadatafilepath, metadata_json = bbox(curdirpath, curfilenames, filename, infix, EPSG, gdalinfo)
+        bbox_json = compacts(polygon) if polygon else None
+
+        metadatafilepath, metadata_json = metadatapath(curdirpath, curfilenames, filename, infix)
+
         bbox_epsg = EPSG if bbox_json else None
         index[-1].update({
             'metadatafilepath_text': fileuri(metadatafilepath),
@@ -133,7 +140,8 @@ def crawl2psv(progname, crawlrootdir):
     end = datetime.now()
     duration = end - start
     count = len(index)
-    duration_per_count = duration / count
+    # ACCOUNT FOR 0
+    duration_per_count = duration / count if count > 0 else duration
     info = { 
         'crawlrootdir': crawlrootdir,
         'start': start.isoformat(), 
@@ -157,8 +165,18 @@ def main(args=None):
     if args and len(args) > 1:
         crawlrootdirs = args[1:]
     if not crawlrootdirs:
-        print(f'Usage: {progname} dir-path(s)...', file=sys.stderr)
-        return 1
+        # if in debufg mode
+        if DEBUG:
+            from tests.testpaths import testpaths
+            crawlrootdirs = testpaths
+            crawlrootdirs = [os.path.dirname(_) for _ in crawlrootdirs if os.path.isfile(_)]
+
+        else:
+            print(f'No directories specified for crawling.', file=sys.stderr)
+            print(f'Usage: {progname} dir-path(s)...', file=sys.stderr)
+            return 1
+ 
+
     for crawlrootdir in crawlrootdirs:
         crawl2psv(progname, crawlrootdir)
     return 0
@@ -166,3 +184,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main(sys.argv)
+    # main(['python','/mnt/datapool2/Archive/EO_IMAGERY/raw/aoi/'])
+
