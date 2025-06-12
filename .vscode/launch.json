@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Load PSV into DB",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/mnt/treeseg_pool/dev/data_catalog-1/load_psv.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-p",
+                "/mnt/treeseg_pool/dev/data_catalog-1/crawl2psv.aoi.psv",
+                "-d",
+                "postgresql://postgres:suffocate%20cargo%20turtle@192.168.11.242:5434/catalog",
+                "--clear",
+                "--init"
+            ]
+        },
+        {
+            "name": "crawl2psv laz",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/mnt/treeseg_pool/dev/data_catalog-1/crawl2psv.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/mnt/BAMspace3/ALS/1. ORGANISED ALS/",
+            ]
+        },
+        {
+            "name": "crawl2psv tif",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/mnt/treeseg_pool/dev/data_catalog-1/crawl2psv.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/mnt/datapool1/datapool1/datasets/las/",
+            ]
+        }
+    ]
+}

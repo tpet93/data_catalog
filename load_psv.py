@@ -47,17 +47,42 @@ def parse_args():
     return parser.parse_args()
 
 
+
 def load_psv_to_db(conn, file_obj):
     """
     Copy PSV content from file_obj into imagery_metadata table.
     """
-    copy_sql = (
-        "COPY imagery_metadata "
-        "FROM STDIN WITH (FORMAT csv, DELIMITER '|', HEADER true)"
-    )
-    with conn.cursor() as cur:
-        cur.copy_expert(copy_sql, file_obj)
-    conn.commit()
+    # Get column names from the table to create a dynamic COPY statement
+    try:
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='imagery_metadata' AND column_name != 'bbox_geom';")
+            columns = [col[0] for col in cur.fetchall()]
+            
+        copy_sql = (
+            f"COPY imagery_metadata ({', '.join(columns)}) "
+            "FROM STDIN WITH (FORMAT csv, DELIMITER '|', HEADER true)"
+        )
+        with conn.cursor() as cur:
+            cur.copy_expert(copy_sql, file_obj)
+        conn.commit()
+
+    except psycopg2.Error as e:
+        print(f"Error loading PSV into imagery_metadata: {e}", file=sys.stderr)
+
+        # Read the first few lines to help diagnose
+        file_obj.seek(0)  # Reset file pointer to the beginning
+        lines = file_obj.readlines()
+        print("First few lines of the PSV file:")
+        # import pandas as pd
+        # print (file_obj.name)
+        # df = pd.read_csv(file_obj, sep='|', header=0, dtype=str)
+        # print(df.head(5).to_string(index=False))
+
+        raise  # Re-raise the exception to propagate it
+
+
+
 
 
 def process_geometry(conn, epsg):
@@ -95,6 +120,24 @@ def process_geometry(conn, epsg):
     conn.autocommit = False
 
 
+
+'''
+filename_text
+filepath_text
+filetime_datetime
+size_bigint
+modified_datetime
+created_datetime
+previewfilepath_text
+metadatafilepath_text
+bbox_epsg_int
+original_crs_int
+bbox_json
+gdalinfo_json
+pylasinfo_json
+metadata_json
+
+'''
 def init_schema(conn):
     """
     Drop and recreate imagery_metadata table and primary index.
@@ -112,8 +155,10 @@ def init_schema(conn):
             previewfilepath TEXT,
             metadatafilepath TEXT,
             bbox_epsg INT,
+            original_crs_int INT,
             bbox JSON,
             gdalinfo JSON,
+            pylasinfo JSON,
             metadata JSON
         );
         ''',

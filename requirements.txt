@@ -3,6 +3,8 @@ GDAL==3.8.4
 xmltodict==0.14.2
 psycopg2-binary>=2.9.6
 requests>=2.31.0
+laspy>=2.4.1
+pyproj>=3.7.0
 # python -m venv venv
 # source venv/bin/activate
 # pip install -r requirements.txt

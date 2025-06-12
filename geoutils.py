@@ -7,6 +7,25 @@ from osgeo import osr
 import platform
 import subprocess
 from utils import dumps, posixpath
+import datetime
+
+import pyproj
+
+from typing import Any, Dict, Union
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, MutableMapping, Sequence, Union
+
+from laspy.point.format import PointFormat as _LasPointFormat  # type: ignore
+from crs_fix import crs_from_ascii_strings  # type: ignore
+
+# Import laspy for LAS/LAZ file handling
+try:
+    import laspy
+    import numpy as np
+    HAS_LASPY = True
+except ImportError:
+    HAS_LASPY = False
+    print("Warning: laspy not installed. LAS/LAZ file processing will not be available.", file=sys.stderr)
 
 
 # def build_bbox(xs, ys):
@@ -185,10 +204,11 @@ def getbound_poly(filepath,infojson=None,target_crs=3857):
     if not infojson:
         msg = f'gdal_info_failed on {filepath}.'
         print(msg, file=sys.stderr)
-        return None
+        return None, None
         
 
     crs = _gdal_contains_epsg(infojson)
+    original_crs = crs  # Store the original CRS
 
     if 'cornerCoordinates' not in infojson:
         msg = f'gdal_info: no cornerCoordinates in {filepath}.'
@@ -196,8 +216,6 @@ def getbound_poly(filepath,infojson=None,target_crs=3857):
         return None
     
     coords = infojson['cornerCoordinates']
-
-
 
     if not crs:
         # if rpcdata is present
@@ -207,23 +225,24 @@ def getbound_poly(filepath,infojson=None,target_crs=3857):
             # coords, use pixel counts
             coords = gdal_transform_rpc(filepath, target_crs, coords)
             crs = target_crs # altready transformed
+            original_crs = 0  # RPC data doesn't have a specific EPSG code
         else:
             msg = f'gdal_info: no EPSG CRS in {filepath} and no RPC data.'
             print(msg, file=sys.stderr)
-            return None
+            return None, None
+        
         
     #CRS exists
     
-    # print(f'CRS for {filepath}: {crs} Target CRS: {target_crs}', file=sys.stderr)
-    if crs != target_crs:
-        try:
-            coords = transform_coords(coords, crs, target_crs)
+# print(f'CRS for {filepath}: {crs} Target CRS: {target_crs}', file=sys.stderr)    if crs != target_crs:
+    try:
+        coords = transform_coords(coords, crs, target_crs)
 
-        except Exception as ex:
-            msg = f'Coordinate transformation failed for {filepath}: {ex}'
-            print(msg, file=sys.stderr)
-            return None
-        
+    except Exception as ex:
+        msg = f'Coordinate transformation failed for {filepath}: {ex}'
+        print(msg, file=sys.stderr)
+        return None, None
+    
     polygon = {
         'type': 'Polygon',  # GeoJSON type  
         'coordinates': [
@@ -236,7 +255,245 @@ def getbound_poly(filepath,infojson=None,target_crs=3857):
             ]
         ],
     }
-    return polygon
+    return polygon, original_crs
+
+
+
+
+def _serialise(value: Any) -> Any:  # noqa: C901 – complexity acceptable
+    """Recursively convert *value* into JSON‑friendly primitives."""
+
+    # ── Bytes → UTF‑8 string / list[int] ─────────────────────────────────────
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return list(value)
+
+    # ── NumPy scalars / arrays ───────────────────────────────────────────────
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+
+    # ── Path objects → str ───────────────────────────────────────────────────
+    if isinstance(value, Path):
+        return str(value)
+
+    # ── laspy PointFormat special‑case ───────────────────────────────────────
+    if _LasPointFormat is not None and isinstance(value, _LasPointFormat):  # type: ignore[arg-type]
+        return {
+            "id": value.id,
+            "size": value.size ,
+            "num_extra_bytes ": value.num_extra_bytes,
+            "num_standard_bytes ": value.num_standard_bytes ,
+            "dimensions": [d.name for d in value.dimensions],
+        }
+
+    # ── Mapping (dict‑like) → recurse over keys/values ───────────────────────
+    if isinstance(value, Mapping):  # includes dict, defaultdict, OrderedDict …
+        return {str(k): _serialise(v) for k, v in value.items()}
+
+    # ── Sequence / set but **not** (str, bytes) → recurse element‑wise ───────
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_serialise(v) for v in value]
+    
+    # datetime.date
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+
+    # ── Fallback: if JSON accepts it, keep; else stringify ───────────────────
+    try:
+        json.dumps(value)
+        return value
+    except TypeError:
+        return str(value)
+
+
+
+
+def get_las_info(filepath):
+    """Returns LAS/LAZ file information as a dictionary."""
+    if not HAS_LASPY:
+        msg = f'las_info: laspy not installed, cannot process {filepath}.'
+        print(msg, file=sys.stderr)
+        return None
+
+    try:
+        with laspy.open(filepath) as las_file:
+            header = las_file.header
+
+            # convert header into json-like dictionary
+            info: Dict[str, Any] = {}
+            for name in dir(header):
+                if name.startswith("_"):
+                    continue  # Skip private attrs
+                try:
+                    val = getattr(header, name)
+                except AttributeError:
+                    continue
+
+                # Skip callables (methods, properties w/ arguments, etc.)
+                if callable(val):
+                    continue
+
+                # Special‑case Variable Length Records
+                if name == "vlrs":
+                    val = [
+                        {
+                            "user_id": v.user_id,
+                            "record_id": v.record_id,
+                            "description": v.description,
+                            # if has record data
+                        # "AttributeError: 'GeoKeyDirectoryVlr' object has no attribute 'record_data'"
+                            # Raw bytes converted to list of ints for JSON safety
+                            "record_data": list(v.record_data) if hasattr(v, 'record_data') else None,
+
+                            # "record_data": list(v.record_data),
+                        }
+                        for v in val
+                    ]
+
+                info[name] = _serialise(val)
+              # Extract CRS information if available and store it instead of the raw header object
+            crs_info = header.parse_crs()
+
+            # if crs_info is not None:
+            #         # 'COMPD_CS***
+            #     if 'COMPD_CS' in crs_info.srs:
+            #         ascii_vlr = header.vlrs.get("GeoAsciiParamsVlr")
+            #         if ascii_vlr:
+            #             crs_info2 = crs_from_ascii_strings(ascii_vlr[0].strings)
+
+
+
+            if crs_info is None:
+                info['bad_crs'] = True
+                ascii_vlr = header.vlrs.get("GeoAsciiParamsVlr")
+                if ascii_vlr:
+                     crs_info = crs_from_ascii_strings(ascii_vlr[0].strings)
+
+            if crs_info is None:
+                info['crs'] = None
+                info['srs'] = None
+            else:
+                info['crs'] = crs_info.to_json_dict()
+                info['srs'] = crs_info.to_2d().to_epsg() if crs_info.srs else None
+            
+            # Store header properties we might need later, but don't store the raw header object
+            info['header_info'] = {
+                'version': header.version,
+                'point_format': _serialise(header.point_format),
+                'scales': _serialise(header.scales),
+                'offsets': _serialise(header.offsets)
+            }
+            
+            # Extract corner coordinates
+            corner_coordinates = {
+                'upperLeft': [float(header.mins[0]), float(header.maxs[1])],
+                'upperRight': [float(header.maxs[0]), float(header.maxs[1])],
+                'lowerRight': [float(header.maxs[0]), float(header.mins[1])],
+                'lowerLeft': [float(header.mins[0]), float(header.mins[1])],
+                'center': [
+                    float(header.mins[0] + (header.maxs[0] - header.mins[0]) / 2),
+                    float(header.mins[1] + (header.maxs[1] - header.mins[1]) / 2)
+                ]
+            }
+            
+            info['cornerCoordinates'] = corner_coordinates
+            
+            return info
+    except Exception as ex:
+        msg = f'las_info: failed on {filepath}: {str(ex)}.'
+        print(msg, file=sys.stderr)
+    
+    return None
+
+
+def get_las_crs(header):
+
+    crsdata = header.parse_crs()
+    crs = crsdata.srs
+    return crs if crs else None
+
+
+   
+
+def getbound_poly_las(filepath, las_info=None, target_crs=3857):
+    """Get the bounding polygon for a LAS/LAZ file."""
+    if not HAS_LASPY:
+        msg = f'getbound_poly_las: laspy not installed, cannot process {filepath}.'
+        print(msg, file=sys.stderr)
+        return None, None
+    
+    if las_info is None:
+        las_info = get_las_info(filepath)
+    
+    if not las_info or 'cornerCoordinates' not in las_info:
+        msg = f'las_info: no cornerCoordinates in {filepath}.'
+        print(msg, file=sys.stderr)
+        return None, None
+    
+    coords = las_info['cornerCoordinates']
+      # Try to determine the source CRS from the LAS file
+    src_crs = None
+    if 'srs' in las_info:
+        src_crs = las_info['srs']
+
+    # get as int after epsg
+    # src_crs = int(src_crs.split(':')[-1]) if src_crs else None
+    # src_crs = int(src_crs.split(':')[-1]) if src_crs else None
+    
+    # Store the original CRS for returning later
+    original_crs = src_crs
+    
+    # If we couldn't determine the CRS from the file, use a default
+    # or inform the user that we're making an assumption
+    if not src_crs:
+        print(f"Warning: Could not determine CRS for {filepath}", file=sys.stderr)
+        src_crs = None  # WGS 84 as a reasonable default for LiDAR data    # Transform coordinates if necessary
+    if src_crs != target_crs:
+        try:
+            print(f"Transforming LAS coordinates from EPSG:{src_crs} to EPSG:{target_crs}", file=sys.stderr)
+            coords = transform_coords(coords, src_crs, target_crs)
+        except Exception as ex:
+            msg = f"Coordinate transformation failed for LAS file {filepath}: {ex}"
+            print(msg, file=sys.stderr)
+            # Continue with untransformed coordinates rather than failing completely
+
+    # Check for Infinity values in coordinates
+    for corner in ['upperLeft', 'upperRight', 'lowerRight', 'lowerLeft']:
+        if corner not in coords:
+            print(f"Warning: Missing {corner} coordinate in {filepath}", file=sys.stderr)
+            return None, original_crs
+        
+        # Check if values are numbers and not infinity or NaN
+        for val in coords[corner]:
+            if not isinstance(val, (int, float)) or not np.isfinite(val):
+                print(f"Warning: Invalid coordinate value {val} in {corner} for {filepath}", file=sys.stderr)
+                return None, original_crs
+    
+    # Create polygon only if all coordinates are valid
+    polygon = {
+        'type': 'Polygon',  # GeoJSON type  
+        'coordinates': [
+            [
+                [coords['upperLeft'][0], coords['upperLeft'][1]],
+                [coords['upperRight'][0], coords['upperRight'][1]],
+                [coords['lowerRight'][0], coords['lowerRight'][1]],
+                [coords['lowerLeft'][0], coords['lowerLeft'][1]],
+                [coords['upperLeft'][0], coords['upperLeft'][1]]  # Closing the polygon
+            ]
+        ],
+    }
+    
+    # Final safety check - convert to string and check for "Infinity"
+    polygon_str = json.dumps(polygon)
+    if "Infinity" in polygon_str or "NaN" in polygon_str:
+        print(f"Warning: Found Infinity or NaN in final polygon for {filepath}, returning None", file=sys.stderr)
+        return None, original_crs
+        
+    return polygon, original_crs
 
 
 if __name__ == '__main__':
@@ -261,6 +518,10 @@ if __name__ == '__main__':
 
     def test_polygon():
         for filepath in testpaths:
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext not in ('.tif', '.jp2', '.tiff'):
+                print(f'Skipping non-image file: {filepath}', file=sys.stderr)
+                continue
             # print(f'filepath={filepath}', file=sys.stderr)
             polygon = getbound_poly(filepath)
             if polygon:
@@ -268,9 +529,52 @@ if __name__ == '__main__':
             else:
                 print(f'Failed to get polygon for {filepath}', file=sys.stderr)
               
+    def test_las_crs(filepath):
+        """Test function to extract CRS information from a LAS/LAZ file."""
+        if not filepath.lower().endswith(('.las', '.laz')):
+            return None
+        
+        try:
+            with laspy.open(filepath) as las_file:
+                header = las_file.header
+                crs_info = get_las_crs(header)
+                return crs_info
+        except Exception as ex:
+            print(f"Error extracting CRS from {filepath}: {ex}", file=sys.stderr)
+            return None   
+    def test_las():
+        for filepath in testpaths:
+            if filepath.lower().endswith(('.las', '.laz')):
+                print(f'Testing LAS/LAZ file: {filepath}', file=sys.stderr)
+                info = get_las_info(filepath)
+                if info:
+                    dumps_info = json.dumps(info, indent=2)
+                    print(f'LAS info for {filepath}:\n{dumps_info}', file=sys.stderr)
+                    # Extract and display CRS information from the serialized info
+                    crs_code = None
+                    if 'crs' in info:
+                        crs_code = info['crs']
+                    
+                    if crs_code:
+                        print(f'Detected CRS for {filepath}: EPSG:{crs_code}', file=sys.stderr)
+                    else:
+                        print(f'Could not detect CRS for {filepath}, using default', file=sys.stderr)
+                    
+                    # Generate and display polygon
+                    polygon = getbound_poly_las(filepath, info)
+                    if polygon:
+                        print(f'LAS polygon for {filepath}: {dumps(polygon)}', file=sys.stderr)
+                    else:
+                        print(f'Failed to get LAS polygon for {filepath}', file=sys.stderr)
+                else:
+                    print(f'Failed to get LAS info for {filepath}', file=sys.stderr)
+
     def tests():
         # tests_geoutils_gdal_info_native()
         # tests_geoutils_gdal_info_subprocess()
         test_polygon()
+        if HAS_LASPY:
+            test_las()
+
 
     tests()
